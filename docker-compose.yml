@@ -45,6 +45,8 @@ services:
       - VOXCPM_LOAD_DENOISER=${VOXCPM_LOAD_DENOISER:-false}
       - VOXCPM_OPTIMIZE=${VOXCPM_OPTIMIZE:-false}
       - HF_HOME=/root/.cache/huggingface
+      - HF_TOKEN=${HF_TOKEN:-}
+      - VOXCPM_PRELOAD=${VOXCPM_PRELOAD:-true}
       - NVIDIA_VISIBLE_DEVICES=all
       - PYTHONUNBUFFERED=1
     deploy:

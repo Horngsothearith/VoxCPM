@@ -27,9 +27,11 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 import torch
+import uvicorn
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Request, Response
 from fastapi.responses import Response, StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
 # Ensure src is in python path
@@ -222,7 +224,10 @@ async def health_check():
         "status": "online",
         "model_id": state.model_id,
         "is_model_loaded": state.model is not None,
-        "device": state.resolved_device,
+        "is_loading": state.is_loading,
+        "device": state.resolved_device if state.model is not None else (
+            ("cuda" if has_gpu else "cpu") if state.device == "auto" else state.device
+        ),
         "cuda_available": has_gpu,
         "gpu_name": gpu_name,
         "sample_rate": state.sample_rate,
@@ -275,7 +280,7 @@ async def openai_speech(req: OpenAISpeechRequest):
     if not req.input or not req.input.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
 
-    model = get_or_load_model()
+    model = await run_in_threadpool(get_or_load_model)
     
     # Process voice description
     voice_key = (req.voice or "alloy").lower().strip()
@@ -303,12 +308,14 @@ async def openai_speech(req: OpenAISpeechRequest):
             full_text = f"({speed_hint}){full_text}"
 
     try:
-        with state.model_lock:
-            wav = model.generate(
-                text=full_text,
-                cfg_value=2.0,
-                inference_timesteps=10,
-            )
+        def _run():
+            with state.model_lock:
+                return model.generate(
+                    text=full_text,
+                    cfg_value=2.0,
+                    inference_timesteps=10,
+                )
+        wav = await run_in_threadpool(_run)
             
         wav_bytes = audio_numpy_to_wav_bytes(wav, state.sample_rate)
         
@@ -332,7 +339,7 @@ async def tts_generate(req: TTSGenerateRequest):
     if not req.text or not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
-    model = get_or_load_model()
+    model = await run_in_threadpool(get_or_load_model)
     
     # Format text with voice design if provided
     final_text = req.text.strip()
@@ -366,18 +373,20 @@ async def tts_generate(req: TTSGenerateRequest):
             prompt_path = prompt_file.name
 
         t0 = time.time()
-        with state.model_lock:
-            wav = model.generate(
-                text=final_text,
-                prompt_wav_path=prompt_path,
-                prompt_text=req.prompt_text,
-                reference_wav_path=ref_path,
-                cfg_value=req.cfg_value,
-                inference_timesteps=req.inference_timesteps,
-                normalize=req.normalize,
-                denoise=req.denoise,
-                seed=req.seed,
-            )
+        def _run():
+            with state.model_lock:
+                return model.generate(
+                    text=final_text,
+                    prompt_wav_path=prompt_path,
+                    prompt_text=req.prompt_text,
+                    reference_wav_path=ref_path,
+                    cfg_value=req.cfg_value,
+                    inference_timesteps=req.inference_timesteps,
+                    normalize=req.normalize,
+                    denoise=req.denoise,
+                    seed=req.seed,
+                )
+        wav = await run_in_threadpool(_run)
         elapsed = time.time() - t0
         duration = len(wav) / state.sample_rate
 
@@ -431,7 +440,7 @@ async def tts_clone_file(
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
-    model = get_or_load_model()
+    model = await run_in_threadpool(get_or_load_model)
     
     # Save uploaded audio file to temporary location
     suffix = Path(file.filename or "input.wav").suffix or ".wav"
@@ -451,16 +460,18 @@ async def tts_clone_file(
 
     try:
         t0 = time.time()
-        with state.model_lock:
-            wav = model.generate(
-                text=final_text,
-                prompt_wav_path=prompt_path,
-                prompt_text=prompt_text,
-                reference_wav_path=temp_ref.name,
-                cfg_value=cfg_value,
-                inference_timesteps=inference_timesteps,
-                seed=seed,
-            )
+        def _run():
+            with state.model_lock:
+                return model.generate(
+                    text=final_text,
+                    prompt_wav_path=prompt_path,
+                    prompt_text=prompt_text,
+                    reference_wav_path=temp_ref.name,
+                    cfg_value=cfg_value,
+                    inference_timesteps=inference_timesteps,
+                    seed=seed,
+                )
+        wav = await run_in_threadpool(_run)
         elapsed = time.time() - t0
         duration = len(wav) / state.sample_rate
         wav_bytes = audio_numpy_to_wav_bytes(wav, state.sample_rate)
@@ -490,7 +501,7 @@ async def tts_stream(req: TTSGenerateRequest):
     Real-time streaming TTS endpoint.
     Streams raw 16-bit PCM audio chunks (48kHz mono) with low time-to-first-audio.
     """
-    model = get_or_load_model()
+    model = await run_in_threadpool(get_or_load_model)
     
     final_text = req.text.strip()
     if req.voice_design and req.voice_design.strip():
@@ -1176,8 +1187,15 @@ def main():
     print("=" * 60)
 
     if args.preload:
-        logger.info("Preloading model at startup...")
-        get_or_load_model()
+        logger.info("Preloading model in background at startup...")
+
+        def _preload():
+            try:
+                get_or_load_model()
+            except Exception:
+                pass  # already logged in get_or_load_model
+
+        threading.Thread(target=_preload, daemon=True).start()
 
     uvicorn.run(app, host=args.host, port=args.port)
 
