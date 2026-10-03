@@ -11,3 +11,6 @@ models/
 data/
 lora/
 output/
+outputs/
+.env
+*.wav

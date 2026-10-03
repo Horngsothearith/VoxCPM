@@ -1,0 +1,60 @@
+services:
+  voxcpm-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: python:3.10-slim
+    image: voxcpm-api:latest
+    container_name: voxcpm-api
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - VOXCPM_HOST=0.0.0.0
+      - VOXCPM_PORT=8000
+      - VOXCPM_MODEL_ID=${VOXCPM_MODEL_ID:-openbmb/VoxCPM2}
+      - VOXCPM_DEVICE=${VOXCPM_DEVICE:-auto}
+      - VOXCPM_LOAD_DENOISER=${VOXCPM_LOAD_DENOISER:-false}
+      - VOXCPM_OPTIMIZE=${VOXCPM_OPTIMIZE:-false}
+      - HF_HOME=/root/.cache/huggingface
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Persistent cache for HuggingFace model weights
+      - ./models:/root/.cache/huggingface
+      # Directory for generated or uploaded audio outputs
+      - ./outputs:/app/outputs
+    restart: unless-stopped
+
+  # Optional GPU-accelerated service (run with: docker compose --profile gpu up -d)
+  voxcpm-api-gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE_IMAGE: pytorch/pytorch:2.5.1-cuda12.4-cudnn9-runtime
+    image: voxcpm-api:gpu
+    container_name: voxcpm-api-gpu
+    profiles: ["gpu"]
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - VOXCPM_HOST=0.0.0.0
+      - VOXCPM_PORT=8000
+      - VOXCPM_MODEL_ID=${VOXCPM_MODEL_ID:-openbmb/VoxCPM2}
+      - VOXCPM_DEVICE=cuda
+      - VOXCPM_LOAD_DENOISER=${VOXCPM_LOAD_DENOISER:-false}
+      - VOXCPM_OPTIMIZE=${VOXCPM_OPTIMIZE:-false}
+      - HF_HOME=/root/.cache/huggingface
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ./models:/root/.cache/huggingface
+      - ./outputs:/app/outputs
+    restart: unless-stopped
