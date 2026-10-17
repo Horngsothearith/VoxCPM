@@ -28,9 +28,10 @@ import numpy as np
 import soundfile as sf
 import torch
 import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Request, Response
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Request, Response, Depends
 from fastapi.responses import Response, StreamingResponse, HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
@@ -43,6 +44,8 @@ if str(src_dir) not in sys.path:
 import voxcpm
 from voxcpm import VoxCPM
 from voxcpm.model.utils import resolve_runtime_device
+
+import accounts
 
 # Configure logging
 logging.basicConfig(
@@ -207,10 +210,15 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # API clients use Bearer keys; the session cookie stays same-site
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Accounts: login/signup, API keys, credits, purchase & admin pages (see accounts.py)
+accounts.init_db()
+app.include_router(accounts.router)
+app.mount("/static", StaticFiles(directory=accounts.WEB_DIR), name="static")
 
 # ----------------- Endpoints -----------------
 
@@ -272,7 +280,7 @@ async def list_voices():
     }
 
 @app.post("/v1/audio/speech", tags=["OpenAI Compatible"])
-async def openai_speech(req: OpenAISpeechRequest):
+async def openai_speech(req: OpenAISpeechRequest, user=Depends(accounts.api_user)):
     """
     OpenAI-compatible Text-To-Speech endpoint.
     Compatible with OpenAI clients, OpenWebUI, LibreChat, SillyTavern, etc.
@@ -307,6 +315,7 @@ async def openai_speech(req: OpenAISpeechRequest):
         else:
             full_text = f"({speed_hint}){full_text}"
 
+    cost = await run_in_threadpool(accounts.charge, user, req.input, "/v1/audio/speech")
     try:
         def _run():
             with state.model_lock:
@@ -327,11 +336,12 @@ async def openai_speech(req: OpenAISpeechRequest):
         return Response(content=wav_bytes, media_type="audio/wav")
 
     except Exception as e:
+        await run_in_threadpool(accounts.refund, user, cost, "/v1/audio/speech")
         logger.error(f"Error during OpenAI speech generation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/tts/generate", tags=["VoxCPM"])
-async def tts_generate(req: TTSGenerateRequest):
+async def tts_generate(req: TTSGenerateRequest, user=Depends(accounts.api_user)):
     """
     Full-featured VoxCPM generation endpoint.
     Supports Voice Design, Controllable Voice Cloning, and Ultimate Cloning.
@@ -353,6 +363,7 @@ async def tts_generate(req: TTSGenerateRequest):
     ref_path = None
     prompt_path = None
 
+    cost = await run_in_threadpool(accounts.charge, user, req.text, "/v1/tts/generate")
     try:
         # Handle reference audio from base64
         if req.reference_audio_base64:
@@ -413,6 +424,7 @@ async def tts_generate(req: TTSGenerateRequest):
         )
 
     except Exception as e:
+        await run_in_threadpool(accounts.refund, user, cost, "/v1/tts/generate")
         logger.error(f"Error during TTS generation: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -432,6 +444,7 @@ async def tts_clone_file(
     cfg_value: float = Form(2.0),
     inference_timesteps: int = Form(10),
     seed: Optional[int] = Form(None),
+    user=Depends(accounts.api_user),
 ):
     """
     Direct multipart file-upload endpoint for voice cloning.
@@ -441,7 +454,8 @@ async def tts_clone_file(
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
     model = await run_in_threadpool(get_or_load_model)
-    
+    cost = await run_in_threadpool(accounts.charge, user, text, "/v1/tts/clone")
+
     # Save uploaded audio file to temporary location
     suffix = Path(file.filename or "input.wav").suffix or ".wav"
     temp_ref = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
@@ -486,6 +500,7 @@ async def tts_clone_file(
             }
         )
     except Exception as e:
+        await run_in_threadpool(accounts.refund, user, cost, "/v1/tts/clone")
         logger.error(f"Error during voice cloning: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
@@ -496,7 +511,7 @@ async def tts_clone_file(
             pass
 
 @app.post("/v1/tts/stream", tags=["VoxCPM"])
-async def tts_stream(req: TTSGenerateRequest):
+async def tts_stream(req: TTSGenerateRequest, user=Depends(accounts.api_user)):
     """
     Real-time streaming TTS endpoint.
     Streams raw 16-bit PCM audio chunks (48kHz mono) with low time-to-first-audio.
@@ -510,23 +525,28 @@ async def tts_stream(req: TTSGenerateRequest):
             design = f"({design})"
         final_text = f"{design}{final_text}"
 
+    cost = await run_in_threadpool(accounts.charge, user, req.text, "/v1/tts/stream")
+
     def stream_generator():
-        with state.model_lock:
-            for chunk in model.generate_streaming(
-                text=final_text,
-                cfg_value=req.cfg_value,
-                inference_timesteps=req.inference_timesteps,
-                seed=req.seed,
-            ):
-                # Convert chunk to 16-bit PCM
-                pcm_bytes = (chunk * 32767).astype(np.int16).tobytes()
-                yield pcm_bytes
+        try:
+            with state.model_lock:
+                for chunk in model.generate_streaming(
+                    text=final_text,
+                    cfg_value=req.cfg_value,
+                    inference_timesteps=req.inference_timesteps,
+                    seed=req.seed,
+                ):
+                    # Convert chunk to 16-bit PCM
+                    pcm_bytes = (chunk * 32767).astype(np.int16).tobytes()
+                    yield pcm_bytes
+        except Exception:
+            accounts.refund(user, cost, "/v1/tts/stream")
+            raise
 
     return StreamingResponse(stream_generator(), media_type="audio/pcm")
 
 # ----------------- Interactive Web UI Playground -----------------
 
-@app.get("/", response_class=HTMLResponse, tags=["Playground"])
 @app.get("/ui", response_class=HTMLResponse, tags=["Playground"])
 async def web_playground():
     """Interactive, sleek dark-mode Web UI Playground for testing VoxCPM API."""
@@ -809,6 +829,7 @@ async def web_playground():
       </div>
       <h1>VoxCPM Local API</h1>
       <p class="subtitle">Tokenizer-Free TTS • Multilingual • Voice Design • Controllable Cloning</p>
+      <p class="subtitle" style="margin-top: 8px; font-size: 0.9rem;"><a href="/dashboard" style="color: #818cf8;">← Dashboard</a> · Each generation uses 1 credit per character</p>
     </header>
 
     <div class="card">
@@ -1181,7 +1202,10 @@ def main():
     print(f" • Host & Port: http://{args.host}:{args.port}")
     print(f" • Model:       {args.model_id}")
     print(f" • Device:      {args.device}")
+    print(f" • Home:        http://localhost:{args.port}/")
+    print(f" • Dashboard:   http://localhost:{args.port}/dashboard")
     print(f" • Web UI:      http://localhost:{args.port}/ui")
+    print(f" • Auth:        {'API key / login required' if accounts.AUTH_ENABLED else 'DISABLED (VOXCPM_AUTH=false)'}")
     print(f" • API Docs:    http://localhost:{args.port}/docs")
     print(f" • OpenAI Spec: http://localhost:{args.port}/v1/audio/speech")
     print("=" * 60)

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard · VoxCPM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+    .layout > div { min-width: 0; } /* let wide code/tables scroll instead of widening the page */
+    .sidebar { border-right: 1px solid var(--border); padding: 18px 12px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
+    .sidebar .brand { padding: 4px 10px 18px; }
+    .side-link { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-size: 0.9rem; }
+    .side-link svg { width: 17px; height: 17px; flex: none; }
+    .side-link:hover { color: var(--text); background: var(--surface-2); }
+    .side-link[aria-current="page"] { color: var(--text); background: var(--surface-2); }
+    .side-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); padding: 14px 10px 6px; }
+    .side-foot { margin-top: auto; border-top: 1px solid var(--border); padding-top: 12px; }
+    .who { padding: 4px 10px 10px; font-size: 0.85rem; overflow: hidden; }
+    .who strong { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .who span { color: var(--dim); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+
+    .content { padding: 36px 40px 60px; max-width: 1080px; width: 100%; }
+    .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
+    .page-head h1 { font-size: 1.6rem; letter-spacing: -0.03em; font-weight: 650; }
+    .page-head p { color: var(--muted); font-size: 0.92rem; margin-top: 4px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+    h2.h { font-size: 1rem; font-weight: 600; margin: 32px 0 12px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .new-key { border-color: rgba(62, 207, 142, 0.35); background: rgba(62, 207, 142, 0.05); margin-bottom: 20px; }
+    .key-box { display: flex; gap: 8px; margin-top: 12px; }
+    .key-box code { flex: 1; min-width: 0; padding: 10px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; overflow-x: auto; white-space: nowrap; }
+    .admin-adjust { display: flex; gap: 6px; }
+    .admin-adjust .input { width: 110px; height: 30px; font-size: 0.82rem; }
+    .mobile-bar { display: none; }
+
+    @media (max-width: 860px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .mobile-bar { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--bg); z-index: 5; }
+      .mobile-bar a { white-space: nowrap; }
+      .content { padding: 24px 16px 48px; }
+      .stats { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar" aria-label="Dashboard">
+      <a class="brand" href="/"><span data-logo></span>VoxCPM</a>
+      <a class="side-link" href="#overview" data-tab="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</a>
+      <a class="side-link" href="#keys" data-tab="keys">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg>API keys</a>
+      <a class="side-link" href="#credits" data-tab="credits">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M15 9.5c-.5-1-1.6-1.5-3-1.5-1.7 0-3 .9-3 2s1 1.7 3 2 3 .9 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.5M12 6v2M12 16v2"/></svg>Credits &amp; usage</a>
+      <a class="side-link" href="/pricing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6h15l-1.5 9h-12z"/><path d="M6 6L5 3H2"/><circle cx="9" cy="20" r="1.3"/><circle cx="18" cy="20" r="1.3"/></svg>Buy credits</a>
+      <a class="side-link" href="/ui">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 4l14 8-14 8z"/></svg>Playground</a>
+      <a class="side-link" href="/docs" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4h11l5 5v11H4z"/><path d="M14 4v6h6"/></svg>API docs</a>
+      <div id="admin-nav" hidden>
+        <div class="side-label">Admin</div>
+        <a class="side-link" href="#users" data-tab="users">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18 14.8c2 .8 3.2 2.6 3.5 5.2"/></svg>Users</a>
+      </div>
+      <div class="side-foot">
+        <div class="who"><strong id="who-name">…</strong><span id="who-email"></span></div>
+        <button class="btn btn-ghost btn-sm btn-block" id="logout" style="justify-content:flex-start">Log out</button>
+      </div>
+    </aside>
+
+    <div>
+      <nav class="mobile-bar" aria-label="Dashboard">
+        <a class="btn btn-outline btn-sm" href="/">Home</a>
+        <a class="btn btn-outline btn-sm" href="#overview">Overview</a>
+        <a class="btn btn-outline btn-sm" href="#keys">API keys</a>
+        <a class="btn btn-outline btn-sm" href="#credits">Credits</a>
+        <a class="btn btn-outline btn-sm" href="/pricing">Buy credits</a>
+        <a class="btn btn-outline btn-sm" href="#users" id="admin-mobile" hidden>Users</a>
+      </nav>
+
+      <main class="content">
+        <!-- Overview -->
+        <section data-panel="overview">
+          <div class="page-head">
+            <div><h1 id="greeting">Overview</h1><p>Your balance, keys and a snippet to get going.</p></div>
+            <a class="btn btn-primary" href="/pricing">Buy credits</a>
+          </div>
+          <div class="stats">
+            <div class="card"><div class="stat-label">Credit balance</div><div class="stat-value" id="stat-credits">—</div></div>
+            <div class="card"><div class="stat-label">Used in last 100 events</div><div class="stat-value" id="stat-used">—</div></div>
+            <div class="card"><div class="stat-label">Active API keys</div><div class="stat-value" id="stat-keys">—</div></div>
+          </div>
+          <div class="alert alert-warn" id="low-credits" hidden>Your balance is running low. <a href="/pricing" style="text-decoration:underline">Top up credits</a> to keep generating.</div>
+          <h2 class="h">Quick start</h2>
+          <p style="color:var(--muted); font-size:0.9rem; margin-bottom:12px">Every request costs 1 credit per input character. Create a key under <a href="#keys" style="text-decoration:underline">API keys</a>, then:</p>
+          <pre class="code" id="quickstart"></pre>
+        </section>
+
+        <!-- API keys -->
+        <section data-panel="keys" hidden>
+          <div class="page-head">
+            <div><h1>API keys</h1><p>Use a key as a Bearer token. Keys act on your account and spend your credits.</p></div>
+          </div>
+
+          <div class="card new-key" id="new-key" hidden>
+            <h3>Copy your new key now</h3>
+            <p>For your security it won't be shown again. Store it somewhere safe.</p>
+            <div class="key-box"><code id="new-key-value"></code><button class="btn btn-primary btn-sm" id="copy-key" style="height:auto">Copy</button></div>
+          </div>
+
+          <form class="card row" id="create-key-form" style="margin-bottom:20px">
+            <label for="key-name" style="font-size:0.9rem; color:var(--muted)">Key name</label>
+            <input class="input" id="key-name" maxlength="60" placeholder="e.g. Production server" style="flex:1; min-width:200px">
+            <button class="btn btn-primary" type="submit" id="create-key">Create key</button>
+          </form>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Key</th><th>Created</th><th>Last used</th><th></th></tr></thead>
+              <tbody id="keys-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Credits -->
+        <section data-panel="credits" hidden>
+          <div class="page-head">
+            <div><h1>Credits &amp; usage</h1><p>One balance for speech, cloning and streaming. Failed generations are refunded automatically.</p></div>
+            <a class="btn btn-primary" href="/pricing">Buy credits</a>
+          </div>
+          <div class="stats">
+            <div class="card"><div class="stat-label">Current balance</div><div class="stat-value" id="credits-balance">—</div></div>
+            <div class="card"><div class="stat-label">Spent (shown below)</div><div class="stat-value" id="credits-spent">—</div></div>
+            <div class="card"><div class="stat-label">Added (shown below)</div><div class="stat-value" id="credits-added">—</div></div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Description</th><th class="num">Change</th><th class="num">Balance</th></tr></thead>
+              <tbody id="history-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Admin: users -->
+        <section data-panel="users" hidden>
+          <div class="page-head">
+            <div><h1>Users</h1><p>All accounts on this server. Add or remove credits with a reason; every change is logged.</p></div>
+            <input class="input" id="user-search" placeholder="Search email or name" style="max-width:260px" aria-label="Search users">
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>User</th><th>Joined</th><th class="num">Credits</th><th class="num">Used</th><th class="num">Keys</th><th>Adjust credits</th></tr></thead>
+              <tbody id="users-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let me = null;
+    let allUsers = [];
+
+    function showTab() {
+      let tab = location.hash.slice(1) || "overview";
+      if (tab === "users" && !me?.is_admin) tab = "overview";
+      if (!document.querySelector(`[data-panel="${tab}"]`)) tab = "overview";
+      document.querySelectorAll("[data-panel]").forEach((p) => (p.hidden = p.dataset.panel !== tab));
+      document.querySelectorAll("[data-tab]").forEach((a) =>
+        a.dataset.tab === tab ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+      ({ keys: loadKeys, credits: loadCredits, users: loadUsers, overview: loadOverview })[tab]()
+        .catch((err) => err.status === 401 ? refreshMe() : toast(err.message, true));
+    }
+
+    // Refunds give back a failed charge, so they count against spending, not as credits added.
+    const isRefund = (h) => h.reason.startsWith("Refund:");
+    const spent = (history) => history.filter((h) => h.delta < 0 || isRefund(h)).reduce((s, h) => s - h.delta, 0);
+
+    async function refreshMe() {
+      me = await currentUser();
+      if (!me) { location.replace("/login?next=" + encodeURIComponent("/dashboard" + location.hash)); return null; }
+      $("who-name").textContent = me.name || me.email.split("@")[0];
+      $("who-email").textContent = me.email;
+      $("admin-nav").hidden = $("admin-mobile").hidden = !me.is_admin;
+      return me;
+    }
+
+    async function loadOverview() {
+      const [keys, credits] = await Promise.all([api("/api/keys"), api("/api/credits/history")]);
+      $("greeting").textContent = `Welcome${me.name ? ", " + me.name : ""}`;
+      $("stat-credits").textContent = fmt(credits.credits);
+      $("stat-used").textContent = fmt(spent(credits.history));
+      $("stat-keys").textContent = keys.keys.length;
+      $("low-credits").hidden = credits.credits >= 500;
+      $("quickstart").innerHTML =
+`<span class="c"># Python, with the official OpenAI SDK</span>
+from openai import OpenAI
+
+client = OpenAI(base_url=<span class="s">"${esc(location.origin)}/v1"</span>, api_key=<span class="s">"YOUR_API_KEY"</span>)
+client.audio.speech.create(model=<span class="s">"voxcpm2"</span>, voice=<span class="s">"nova"</span>,
+                          input=<span class="s">"Hello from VoxCPM!"</span>).write_to_file(<span class="s">"speech.wav"</span>)
+
+<span class="c"># Or cURL</span>
+curl ${esc(location.origin)}/v1/audio/speech \\
+  -H <span class="s">"Authorization: Bearer YOUR_API_KEY"</span> -H <span class="s">"Content-Type: application/json"</span> \\
+  -d <span class="s">'{"model":"voxcpm2","voice":"nova","input":"Hello from VoxCPM!"}'</span> --output speech.wav`;
+    }
+
+    async function loadKeys() {
+      const { keys } = await api("/api/keys");
+      $("keys-body").innerHTML = keys.length
+        ? keys.map((k) => `<tr>
+            <td>${esc(k.name)}</td>
+            <td class="mono">${esc(k.prefix)}…</td>
+            <td>${fmtDate(k.created_at)}</td>
+            <td>${k.last_used_at ? fmtDateTime(k.last_used_at) : "Never"}</td>
+            <td class="num"><button class="btn btn-danger btn-sm" data-revoke="${k.id}" data-name="${esc(k.name)}">Revoke</button></td>
+          </tr>`).join("")
+        : `<tr><td colspan="5" class="empty">No API keys yet. Create one above to call the API.</td></tr>`;
+    }
+
+    async function loadCredits() {
+      const { credits, history } = await api("/api/credits/history");
+      $("credits-balance").textContent = fmt(credits);
+      $("credits-spent").textContent = fmt(spent(history));
+      $("credits-added").textContent = fmt(history.filter((h) => h.delta > 0 && !isRefund(h)).reduce((s, h) => s + h.delta, 0));
+      $("history-body").innerHTML = history.length
+        ? history.map((h) => `<tr>
+            <td>${fmtDateTime(h.created_at)}</td>
+            <td>${esc(h.reason)}</td>
+            <td class="num ${h.delta > 0 ? "pos" : "neg"}">${h.delta > 0 ? "+" : "−"}${fmt(Math.abs(h.delta))}</td>
+            <td class="num">${fmt(h.balance)}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="4" class="empty">No activity yet.</td></tr>`;
+    }
+
+    function renderUsers() {
+      const q = $("user-search").value.trim().toLowerCase();
+      const rows = allUsers.filter((u) => !q || u.email.includes(q) || u.name.toLowerCase().includes(q));
+      $("users-body").innerHTML = rows.length
+        ? rows.map((u) => `<tr>
+            <td><div>${esc(u.name || "—")}${u.is_admin ? ' <span class="badge">admin</span>' : ""}</div><div style="color:var(--dim); font-size:0.8rem">${esc(u.email)}</div></td>
+            <td>${fmtDate(u.created_at)}</td>
+            <td class="num">${fmt(u.credits)}</td>
+            <td class="num">${fmt(u.credits_used)}</td>
+            <td class="num">${u.key_count}</td>
+            <td><form class="admin-adjust" data-user="${u.id}">
+              <input class="input" type="number" step="1" placeholder="+1000 / -500" aria-label="Credit change for ${esc(u.email)}" required>
+              <button class="btn btn-outline btn-sm" type="submit">Apply</button>
+            </form></td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" class="empty">No users match.</td></tr>`;
+    }
+
+    async function loadUsers() {
+      allUsers = (await api("/api/admin/users")).users;
+      renderUsers();
+    }
+
+    // ---- Events ----
+    $("create-key-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      $("create-key").disabled = true;
+      try {
+        const key = await api("/api/keys", { method: "POST", body: { name: $("key-name").value.trim() || "Default key" } });
+        $("new-key-value").textContent = key.key;
+        $("new-key").hidden = false;
+        $("key-name").value = "";
+        await loadKeys();
+      } catch (err) { toast(err.message, true); }
+      $("create-key").disabled = false;
+    });
+
+    $("copy-key").addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText($("new-key-value").textContent); toast("API key copied"); }
+      catch { toast("Copy failed — select the key and copy it manually", true); }
+    });
+
+    $("keys-body").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-revoke]");
+      if (!btn || !confirm(`Revoke "${btn.dataset.name}"? Apps using this key will stop working immediately.`)) return;
+      try { await api(`/api/keys/${btn.dataset.revoke}`, { method: "DELETE" }); toast("Key revoked"); loadKeys(); }
+      catch (err) { toast(err.message, true); }
+    });
+
+    $("users-body").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const form = e.target;
+      const delta = parseInt(form.querySelector("input").value, 10);
+      if (!Number.isFinite(delta) || delta === 0) return toast("Enter a non-zero whole number", true);
+      const reason = prompt("Reason for this adjustment (shown in the user's history):", delta > 0 ? "Bonus credits" : "Credit correction");
+      if (reason === null) return;
+      try {
+        await api(`/api/admin/users/${form.dataset.user}/credits`, { method: "POST", body: { delta, reason: reason.trim() || "Admin adjustment" } });
+        toast("Credits updated");
+        loadUsers();
+        if (Number(form.dataset.user) === me.id) refreshMe();
+      } catch (err) { toast(err.message, true); }
+    });
+
+    $("user-search").addEventListener("input", renderUsers);
+
+    $("logout").addEventListener("click", async () => {
+      await api("/api/auth/logout", { method: "POST" }).catch(() => {});
+      location.assign("/");
+    });
+
+    window.addEventListener("hashchange", () => showTab());
+    refreshMe().then((u) => u && showTab()).catch((err) => toast(err.message, true));
+  </script>
+</body>
+</html>

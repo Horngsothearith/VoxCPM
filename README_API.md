@@ -41,10 +41,30 @@ run_api.bat
 
 ### 2. Open the Interactive Web Playground
 Open your browser and navigate to:
-👉 **[http://localhost:8000/ui](http://localhost:8000/ui)** (or simply `http://localhost:8000/`)
+👉 **[http://localhost:8000/](http://localhost:8000/)** (home) → sign up → **[/dashboard](http://localhost:8000/dashboard)** to create an API key. The playground is at **[/ui](http://localhost:8000/ui)**.
 
 Interactive Swagger API docs are available at:
 👉 **[http://localhost:8000/docs](http://localhost:8000/docs)**
+
+---
+
+## 🔐 Accounts, API Keys & Credits
+
+Generation endpoints require an API key (or a logged-in browser session):
+
+1. Open `http://localhost:8000/signup` and create an account (new accounts get `VOXCPM_SIGNUP_CREDITS` free credits).
+2. In **Dashboard → API keys**, create a key. It is shown once; only its hash is stored.
+3. Send it as `Authorization: Bearer <key>` (the OpenAI SDK does this with `api_key=`).
+
+Each request costs **1 credit per input character**, charged up front and refunded if generation fails. Out of credits → `402`. Buy packs at `/pricing`, or have an admin (listed in `VOXCPM_ADMIN_EMAILS`) adjust balances in **Dashboard → Users**.
+
+| Env var | Default | Description |
+|---|---|---|
+| `VOXCPM_AUTH` | `true` | `false` turns auth and credits off (open local server, like before) |
+| `VOXCPM_SIGNUP_CREDITS` | `2000` | Free credits for new accounts |
+| `VOXCPM_ADMIN_EMAILS` | *(empty)* | Comma-separated admin emails |
+| `VOXCPM_PAYMENTS` | `off` | `demo` grants purchased packs without payment (testing only). No real payment provider is wired yet |
+| `VOXCPM_DB_PATH` | `data/accounts.db` | SQLite database location |
 
 ---
 
@@ -60,6 +80,7 @@ Interactive Swagger API docs are available at:
 | `POST` | `/v1/tts/clone` | Multipart file upload endpoint for zero-shot Voice Cloning |
 | `POST` | `/v1/tts/stream` | Low-latency streaming TTS (raw 16-bit PCM chunks) |
 | `GET` | `/ui` | Sleek dark-mode Web UI Playground |
+| `GET` | `/`, `/login`, `/signup`, `/dashboard`, `/pricing` | Home, auth, dashboard (API keys, credits, admin users) and purchase pages |
 
 ---
 
@@ -72,6 +93,7 @@ This endpoint is drop-in compatible with any software expecting OpenAI's TTS API
 #### cURL
 ```bash
 curl -X POST http://localhost:8000/v1/audio/speech \
+  -H "Authorization: Bearer $VOXCPM_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "voxcpm2",
@@ -86,7 +108,7 @@ curl -X POST http://localhost:8000/v1/audio/speech \
 ```python
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed")
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="vox_...")  # key from /dashboard
 
 response = client.audio.speech.create(
     model="voxcpm2",
@@ -114,6 +136,7 @@ Create completely new voices simply by describing them:
 #### cURL
 ```bash
 curl -X POST http://localhost:8000/v1/tts/generate \
+  -H "Authorization: Bearer $VOXCPM_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "The universe is under no obligation to make sense to you.",
@@ -134,6 +157,7 @@ Upload a 5–15 second `.wav` or `.mp3` reference clip:
 #### cURL
 ```bash
 curl -X POST http://localhost:8000/v1/tts/clone \
+  -H "Authorization: Bearer $VOXCPM_API_KEY" \
   -F "file=@my_voice.wav" \
   -F "text=This is my voice cloned locally by VoxCPM." \
   -F "control=slightly faster, cheerful tone" \
@@ -150,7 +174,8 @@ with open("my_voice.wav", "rb") as f:
         "text": "This voice was synthesized directly from my microphone sample.",
         "control": "warm and friendly"
     }
-    res = requests.post("http://localhost:8000/v1/tts/clone", files=files, data=data)
+    res = requests.post("http://localhost:8000/v1/tts/clone", files=files, data=data,
+                        headers={"Authorization": "Bearer vox_..."})
 
 with open("cloned.wav", "wb") as out:
     out.write(res.content)
@@ -178,6 +203,6 @@ with open("cloned.wav", "wb") as out:
 1. In Settings ➔ Audio ➔ Text-to-Speech:
    - **TTS Engine**: `OpenAI`
    - **API Base URL**: `http://localhost:8000/v1`
-   - **API Key**: `sk-local` (any string)
+   - **API Key**: a key from `/dashboard` (any string if `VOXCPM_AUTH=false`)
    - **TTS Model**: `voxcpm2`
    - **Voice**: `nova` (or `alloy`, `echo`, `shimmer`, etc.)

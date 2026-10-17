@@ -16,11 +16,17 @@ services:
       - VOXCPM_DEVICE=${VOXCPM_DEVICE:-auto}
       - VOXCPM_LOAD_DENOISER=${VOXCPM_LOAD_DENOISER:-false}
       - VOXCPM_OPTIMIZE=${VOXCPM_OPTIMIZE:-false}
+      - VOXCPM_AUTH=${VOXCPM_AUTH:-true}
+      - VOXCPM_SIGNUP_CREDITS=${VOXCPM_SIGNUP_CREDITS:-2000}
+      - VOXCPM_ADMIN_EMAILS=${VOXCPM_ADMIN_EMAILS:-}
+      - VOXCPM_PAYMENTS=${VOXCPM_PAYMENTS:-off}
       - HF_HOME=/root/.cache/huggingface
       - PYTHONUNBUFFERED=1
     volumes:
       # Persistent cache for HuggingFace model weights
       - ./models:/root/.cache/huggingface
+      # Accounts database (users, API keys, credits)
+      - ./data:/app/data
       # Directory for generated or uploaded audio outputs
       - ./outputs:/app/outputs
     restart: unless-stopped
@@ -44,6 +50,10 @@ services:
       - VOXCPM_DEVICE=cuda
       - VOXCPM_LOAD_DENOISER=${VOXCPM_LOAD_DENOISER:-false}
       - VOXCPM_OPTIMIZE=${VOXCPM_OPTIMIZE:-false}
+      - VOXCPM_AUTH=${VOXCPM_AUTH:-true}
+      - VOXCPM_SIGNUP_CREDITS=${VOXCPM_SIGNUP_CREDITS:-2000}
+      - VOXCPM_ADMIN_EMAILS=${VOXCPM_ADMIN_EMAILS:-}
+      - VOXCPM_PAYMENTS=${VOXCPM_PAYMENTS:-off}
       - HF_HOME=/root/.cache/huggingface
       - HF_TOKEN=${HF_TOKEN:-}
       - VOXCPM_PRELOAD=${VOXCPM_PRELOAD:-true}
@@ -58,5 +68,7 @@ services:
               capabilities: [gpu]
     volumes:
       - ./models:/root/.cache/huggingface
+      # Accounts database (users, API keys, credits)
+      - ./data:/app/data
       - ./outputs:/app/outputs
     restart: unless-stopped
