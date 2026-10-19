@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log in · VoxCPM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .split { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; padding: 16px; gap: 16px; }
+    .aside {
+      background: #ededed; color: #0a0a0a; border-radius: 20px; padding: 32px;
+      display: flex; flex-direction: column; justify-content: space-between;
+    }
+    .aside .brand svg rect { fill: #0a0a0a; }
+    .aside .brand svg path { stroke: #ededed; }
+    .aside blockquote { font-size: clamp(1.4rem, 2.4vw, 2rem); line-height: 1.25; letter-spacing: -0.02em; font-weight: 500; max-width: 440px; }
+    .aside cite { display: block; margin-top: 16px; font-style: normal; font-size: 0.9rem; color: #5a5a5a; }
+    .main { display: flex; align-items: center; justify-content: center; padding: 32px 16px; }
+    .form-wrap { width: 100%; max-width: 380px; }
+    .form-wrap h1 { font-size: 1.9rem; letter-spacing: -0.03em; font-weight: 650; }
+    .form-wrap .sub { color: var(--muted); margin: 6px 0 28px; font-size: 0.95rem; }
+    .switch { text-align: center; margin-top: 22px; color: var(--muted); font-size: 0.9rem; }
+    .switch a { color: var(--text); font-weight: 500; }
+    .switch a:hover { text-decoration: underline; }
+    .perks { margin: -8px 0 22px; display: grid; gap: 6px; font-size: 0.85rem; color: var(--muted); list-style: none; }
+    .perks li::before { content: "✓  "; color: var(--success); }
+    @media (max-width: 860px) { .split { grid-template-columns: 1fr; } .aside { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="split">
+    <aside class="aside">
+      <a class="brand" href="/"><span data-logo></span>VoxCPM</a>
+      <div>
+        <blockquote>“Describe a voice in a sentence, and hear it speak a moment later.”</blockquote>
+        <cite>— VoxCPM2 voice design</cite>
+      </div>
+      <span style="font-size:0.8rem; color:#6b6b6b">30 languages · voice cloning · streaming</span>
+    </aside>
+
+    <main class="main">
+      <div class="form-wrap">
+        <h1 id="title">Welcome back</h1>
+        <p class="sub" id="subtitle">Sign in to your account to continue</p>
+        <ul class="perks" id="perks" hidden>
+          <li id="perk-credits">Free credits to start</li>
+          <li>API keys for your apps</li>
+          <li>No credit card required</li>
+        </ul>
+
+        <div class="alert alert-error" id="error" role="alert" hidden></div>
+
+        <form id="form" novalidate>
+          <div class="field" id="name-field" hidden>
+            <label for="name">Name</label>
+            <input class="input" id="name" name="name" autocomplete="name" maxlength="100" placeholder="Your name">
+          </div>
+          <div class="field">
+            <label for="email">Email address</label>
+            <input class="input" id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="input-group">
+              <input class="input" id="password" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="••••••••">
+              <button type="button" id="toggle-pw" aria-label="Show password">Show</button>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-block btn-lg" id="submit" type="submit">Sign in</button>
+        </form>
+
+        <p class="switch" id="switch"></p>
+      </div>
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    const isSignup = location.pathname === "/signup";
+    const params = new URLSearchParams(location.search);
+    // Only allow same-site relative redirects after login
+    const nextRaw = params.get("next") || "/dashboard";
+    const next = nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : "/dashboard";
+    const qs = params.get("next") ? `?next=${encodeURIComponent(next)}` : "";
+
+    const $ = (id) => document.getElementById(id);
+    if (isSignup) {
+      document.title = "Sign up · VoxCPM";
+      $("title").textContent = "Create your account";
+      $("subtitle").textContent = "Start generating speech in under a minute";
+      $("name-field").hidden = false;
+      $("perks").hidden = false;
+      $("password").autocomplete = "new-password";
+      $("password").placeholder = "At least 8 characters";
+      $("submit").textContent = "Create account";
+      $("switch").innerHTML = `Already have an account? <a href="/login${qs}">Log in</a>`;
+      api("/api/plans").then((p) => {
+        if (p.signup_credits > 0) $("perk-credits").textContent = `${fmt(p.signup_credits)} free credits to start`;
+      }).catch(() => {});
+    } else {
+      $("switch").innerHTML = `Don't have an account? <a href="/signup${qs}">Sign up</a>`;
+    }
+
+    // Already signed in? Skip the form.
+    currentUser().then((u) => { if (u) location.replace(next); });
+
+    $("toggle-pw").addEventListener("click", () => {
+      const show = $("password").type === "password";
+      $("password").type = show ? "text" : "password";
+      $("toggle-pw").textContent = show ? "Hide" : "Show";
+      $("toggle-pw").setAttribute("aria-label", show ? "Hide password" : "Show password");
+    });
+
+    $("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = $("email").value.trim();
+      const password = $("password").value;
+      const showError = (msg) => { $("error").textContent = msg; $("error").hidden = false; };
+      $("error").hidden = true;
+
+      if (!email || !email.includes("@")) return showError("Enter a valid email address.");
+      if (isSignup && password.length < 8) return showError("Password must be at least 8 characters.");
+      if (!password) return showError("Enter your password.");
+
+      $("submit").disabled = true;
+      $("submit").textContent = isSignup ? "Creating account…" : "Signing in…";
+      try {
+        const body = isSignup ? { email, password, name: $("name").value.trim() } : { email, password };
+        await api(isSignup ? "/api/auth/signup" : "/api/auth/login", { method: "POST", body });
+        location.assign(next);
+      } catch (err) {
+        showError(err.message);
+        $("submit").disabled = false;
+        $("submit").textContent = isSignup ? "Create account" : "Sign in";
+      }
+    });
+  </script>
+</body>
+</html>

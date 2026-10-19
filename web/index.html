@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VoxCPM — Lifelike multilingual text to speech</title>
+  <meta name="description" content="VoxCPM2 text-to-speech: voice design, voice cloning and streaming in 30 languages, with an OpenAI-compatible API.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .hero { position: relative; padding: 110px 0 90px; text-align: center; overflow: hidden; }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; z-index: -1;
+      background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 56px 56px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, #000 20%, transparent 75%);
+      opacity: 0.55;
+    }
+    .hero h1 { font-size: clamp(2.4rem, 6vw, 4.4rem); line-height: 1.04; letter-spacing: -0.045em; font-weight: 700; max-width: 880px; margin: 18px auto 0; }
+    .hero p { color: var(--muted); font-size: 1.1rem; max-width: 620px; margin: 22px auto 0; }
+    .hero .cta { display: flex; gap: 12px; justify-content: center; margin-top: 34px; flex-wrap: wrap; }
+
+    .demo { max-width: 760px; margin: 64px auto 0; text-align: left; }
+    .demo .card { padding: 0; overflow: hidden; }
+    .demo-head { display: flex; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--border); align-items: center; }
+    .demo-head .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); }
+    .demo-head span { margin-left: auto; font-size: 0.8rem; color: var(--dim); }
+    .demo-body { padding: 22px; font-size: 1.05rem; line-height: 1.7; }
+    .demo-body em { font-style: normal; color: var(--muted); font-family: var(--mono); font-size: 0.9rem; }
+    .wave { display: flex; align-items: center; gap: 3px; height: 72px; padding: 0 22px 22px; }
+    .wave i { flex: 1; background: var(--border-strong); border-radius: 2px; }
+
+    section { padding: 72px 0 0; }
+    .section-head { max-width: 640px; margin-bottom: 36px; }
+    .section-head h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); letter-spacing: -0.03em; line-height: 1.15; font-weight: 650; }
+    .section-head p { color: var(--muted); margin-top: 12px; }
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .feature { background: var(--bg); padding: 26px; }
+    .feature svg { width: 22px; height: 22px; color: var(--text); margin-bottom: 16px; }
+    .feature h3 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .feature p { color: var(--muted); font-size: 0.9rem; }
+    @media (max-width: 860px) { .features { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+
+    .api-grid { display: grid; grid-template-columns: 1fr 1.25fr; gap: 40px; align-items: center; }
+    .api-grid ul { list-style: none; display: grid; gap: 14px; margin-top: 24px; }
+    .api-grid li { display: flex; gap: 10px; color: var(--muted); font-size: 0.95rem; }
+    .api-grid li::before { content: "→"; color: var(--text); }
+    @media (max-width: 860px) { .api-grid { grid-template-columns: 1fr; } }
+
+    .cta-band { margin-top: 96px; text-align: center; padding: 64px 24px; border: 1px solid var(--border); border-radius: 20px; background: radial-gradient(ellipse at top, #1a1a1a, var(--bg) 70%); }
+    .cta-band h2 { font-size: clamp(1.7rem, 3.5vw, 2.4rem); letter-spacing: -0.03em; }
+    .cta-band p { color: var(--muted); margin: 12px 0 28px; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container">
+      <a class="brand" href="/"><span data-logo></span>VoxCPM</a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="/pricing">Pricing</a>
+        <a href="#api">API</a>
+        <a href="/ui">Playground</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="/login">Log in</a>
+        <a class="btn btn-primary" href="/signup">Try for free</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <span class="badge">VoxCPM2 · 30 languages · 48 kHz</span>
+      <h1>Turn text into lifelike speech, in any voice.</h1>
+      <p>Design a voice from a sentence, clone one from a few seconds of audio, and stream studio-quality speech through a simple, OpenAI-compatible API.</p>
+      <div class="cta">
+        <a class="btn btn-primary btn-lg" href="/signup">Get started free</a>
+        <a class="btn btn-outline btn-lg" href="/ui">Open playground</a>
+      </div>
+
+      <div class="demo">
+        <div class="card">
+          <div class="demo-head"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span>voice design</span></div>
+          <div class="demo-body"><em>(A warm, calm documentary narrator)</em> Every voice tells a story. Describe the one you want, and VoxCPM will speak it.</div>
+          <div class="wave" id="wave" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="features">
+      <div class="section-head">
+        <h2>Everything you need to build with voice.</h2>
+        <p>One model, one credit balance, every feature: from a quick voiceover to a production speech pipeline.</p>
+      </div>
+      <div class="features">
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+          <h3>Voice design</h3>
+          <p>Describe a voice in plain words (age, tone, pace, emotion) and get it instantly. No samples needed.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <h3>Voice cloning</h3>
+          <p>Clone a voice from a short reference clip, then steer its style while keeping the timbre.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+          <h3>Real-time streaming</h3>
+          <p>Low time-to-first-audio PCM streaming for assistants, games and live narration.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <h3>30 languages</h3>
+          <p>Tokenizer-free multilingual synthesis, including Chinese dialects, with no language flag.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+          <h3>OpenAI-compatible</h3>
+          <p>Point the OpenAI SDK, OpenWebUI or LibreChat at <code>/v1/audio/speech</code> and it just works.</p>
+        </div>
+        <div class="feature">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+          <h3>Usage &amp; credits</h3>
+          <p>Track every generation in your dashboard. Pay per character, top up whenever you need.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="api-grid">
+        <div class="section-head" style="margin: 0">
+          <h2>Ship it with one request.</h2>
+          <p>Create an API key in your dashboard and call the endpoint from anywhere.</p>
+          <ul>
+            <li>Bearer-token auth with keys you can revoke anytime</li>
+            <li>1 credit per character, refunded if generation fails</li>
+            <li>WAV, raw PCM and streaming responses</li>
+          </ul>
+        </div>
+        <pre class="code" id="curl"></pre>
+      </div>
+    </section>
+
+    <div class="cta-band">
+      <h2>Start speaking in minutes.</h2>
+      <p id="free-credits">Free credits on signup. No credit card required.</p>
+      <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap">
+        <a class="btn btn-primary btn-lg" href="/signup">Create free account</a>
+        <a class="btn btn-outline btn-lg" href="/pricing">View pricing</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <span>Powered by <a href="https://github.com/OpenBMB/VoxCPM">OpenBMB / VoxCPM</a></span>
+      <span style="display:flex; gap:18px"><a href="/pricing">Pricing</a><a href="/docs">API docs</a><a href="/ui">Playground</a></span>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    initNav();
+
+    // Static decorative waveform
+    const wave = document.getElementById("wave");
+    for (let i = 0; i < 64; i++) {
+      const h = 18 + Math.abs(Math.sin(i * 0.45) * Math.cos(i * 0.13)) * 82;
+      wave.insertAdjacentHTML("beforeend", `<i style="height:${h.toFixed(0)}%"></i>`);
+    }
+
+    document.getElementById("curl").innerHTML =
+`<span class="c"># Text to speech with your API key</span>
+curl ${esc(location.origin)}/v1/audio/speech \\
+  -H <span class="s">"Authorization: Bearer $VOXCPM_API_KEY"</span> \\
+  -H <span class="s">"Content-Type: application/json"</span> \\
+  -d <span class="s">'{"model": "voxcpm2", "voice": "nova",
+       "input": "Hello from VoxCPM!"}'</span> \\
+  --output speech.wav`;
+
+    api("/api/plans").then((p) => {
+      if (p.signup_credits > 0) {
+        document.getElementById("free-credits").textContent =
+          `${fmt(p.signup_credits)} free credits on signup. No credit card required.`;
+      }
+    }).catch(() => {});
+  </script>
+</body>
+</html>

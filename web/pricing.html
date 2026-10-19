@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pricing · VoxCPM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <style>
+    .head { text-align: center; padding: 80px 0 44px; }
+    .head h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); letter-spacing: -0.04em; line-height: 1.08; font-weight: 700; }
+    .head p { color: var(--muted); margin: 16px auto 0; max-width: 560px; font-size: 1.05rem; }
+    .plans { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .plan { display: flex; flex-direction: column; gap: 18px; padding: 22px; position: relative; }
+    .plan.popular { border-color: var(--text); }
+    .plan .tag { position: absolute; top: -11px; left: 22px; background: var(--text); color: #0a0a0a; font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+    .plan h2 { font-size: 1rem; font-weight: 600; }
+    .plan .blurb { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+    .price { font-size: 2.2rem; font-weight: 650; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+    .price small { font-size: 0.85rem; color: var(--muted); font-weight: 400; letter-spacing: 0; }
+    .plan ul { list-style: none; display: grid; gap: 8px; font-size: 0.85rem; color: var(--muted); margin-top: auto; }
+    .plan li::before { content: "✓  "; color: var(--text); }
+    .plan li strong { color: var(--text); font-weight: 500; }
+    @media (max-width: 1080px) { .plans { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 720px) { .plans { grid-template-columns: 1fr; } }
+    .faq { max-width: 720px; margin: 72px auto 0; }
+    .faq h2 { font-size: 1.4rem; letter-spacing: -0.02em; margin-bottom: 16px; }
+    .faq details { border-bottom: 1px solid var(--border); padding: 16px 0; }
+    .faq summary { cursor: pointer; font-weight: 500; }
+    .faq details p { color: var(--muted); margin-top: 10px; font-size: 0.92rem; }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="container">
+      <a class="brand" href="/"><span data-logo></span>VoxCPM</a>
+      <div class="nav-links">
+        <a href="/#features">Features</a>
+        <a href="/pricing" aria-current="page" style="color:var(--text)">Pricing</a>
+        <a href="/#api">API</a>
+        <a href="/ui">Playground</a>
+        <a href="/docs">Docs</a>
+      </div>
+      <div class="nav-actions">
+        <a class="btn btn-ghost" href="/login?next=/pricing">Log in</a>
+        <a class="btn btn-primary" href="/signup?next=/pricing">Try for free</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container">
+    <div class="head">
+      <h1>Simple, pay-as-you-go pricing</h1>
+      <p>Buy a credit pack once, use it whenever. One credit covers one character of speech, across voice design, cloning and streaming.</p>
+    </div>
+
+    <div class="alert alert-warn" id="payments-off" hidden style="max-width:720px; margin:0 auto 24px; text-align:center">
+      Online payments aren't enabled on this server yet. Contact the administrator to add credits to your account.
+    </div>
+    <div class="alert alert-success" id="purchased" role="status" hidden style="max-width:720px; margin:0 auto 24px; text-align:center"></div>
+
+    <div class="plans" id="plans" aria-live="polite"></div>
+
+    <div class="faq">
+      <h2>Questions</h2>
+      <details><summary>How are credits counted?</summary><p>Each request costs 1 credit per character of input text (the text to speak, not the voice description). Credits are charged when generation starts and refunded automatically if it fails.</p></details>
+      <details><summary>Do credits expire?</summary><p>No. Credit packs are one-time purchases and stay on your account until used.</p></details>
+      <details><summary>Can I use credits through the API?</summary><p>Yes. The web playground and every API key on your account draw from the same balance.</p></details>
+      <details><summary>Is there a free tier?</summary><p id="faq-free">Every new account starts with free credits, no card required.</p></details>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <span>Powered by <a href="https://github.com/OpenBMB/VoxCPM">OpenBMB / VoxCPM</a></span>
+      <span style="display:flex; gap:18px"><a href="/">Home</a><a href="/docs">API docs</a><a href="/dashboard">Dashboard</a></span>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+  <script>
+    let user = null;
+    let paymentsEnabled = false;
+
+    function renderPlans({ plans, signup_credits }) {
+      const free = `<div class="card plan">
+          <div><h2>Free</h2><div class="blurb">Perfect to get started</div></div>
+          <div class="price">$0</div>
+          <a class="btn ${user ? "btn-outline" : "btn-primary"} btn-block" href="${user ? "/dashboard" : "/signup?next=/pricing"}">${user ? "Go to dashboard" : "Get started free"}</a>
+          <ul><li><strong>${fmt(signup_credits)}</strong> credits on signup</li><li>All voices &amp; voice design</li><li>Voice cloning</li><li>API access</li></ul>
+        </div>`;
+      const paid = plans.map((p) => `<div class="card plan ${p.popular ? "popular" : ""}">
+          ${p.popular ? '<span class="tag">Most popular</span>' : ""}
+          <div><h2>${esc(p.name)}</h2><div class="blurb">${esc(p.blurb)}</div></div>
+          <div class="price">$${p.price_usd.toFixed(2)} <small>one-time</small></div>
+          <button class="btn ${p.popular ? "btn-primary" : "btn-outline"} btn-block" data-plan="${esc(p.id)}" ${paymentsEnabled ? "" : "disabled"}>Buy ${esc(p.name)}</button>
+          <ul><li><strong>${fmt(p.credits)}</strong> credits</li><li>$${(p.price_usd / p.credits * 1000).toFixed(3)} per 1K characters</li><li>Everything in Free</li><li>Credits never expire</li></ul>
+        </div>`).join("");
+      document.getElementById("plans").innerHTML = free + paid;
+    }
+
+    document.getElementById("plans").addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-plan]");
+      if (!btn) return;
+      if (!user) { location.assign("/login?next=/pricing"); return; }
+      const label = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Processing…";
+      try {
+        const res = await api("/api/purchase", { method: "POST", body: { plan: btn.dataset.plan } });
+        const msg = document.getElementById("purchased");
+        msg.innerHTML = `Credits added. Your balance is now <strong>${fmt(res.credits)}</strong>. <a href="/dashboard#credits" style="text-decoration:underline">View usage</a>`;
+        msg.hidden = false;
+        msg.scrollIntoView({ behavior: "smooth", block: "center" });
+        initNav();
+      } catch (err) {
+        if (err.status === 401) return location.assign("/login?next=/pricing");
+        toast(err.message, true);
+      }
+      btn.disabled = false;
+      btn.textContent = label;
+    });
+
+    (async () => {
+      user = await initNav();
+      try {
+        const data = await api("/api/plans");
+        paymentsEnabled = data.payments_enabled;
+        document.getElementById("payments-off").hidden = paymentsEnabled;
+        document.getElementById("faq-free").textContent = `Every new account starts with ${fmt(data.signup_credits)} free credits, no card required.`;
+        renderPlans(data);
+      } catch (err) { toast(err.message, true); }
+    })();
+  </script>
+</body>
+</html>

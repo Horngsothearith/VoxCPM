@@ -6,10 +6,13 @@ Shows how to interact with the local VoxCPM API server using:
 2. Official `openai` Python SDK for drop-in OpenAI TTS compatibility
 """
 
+import os
 import sys
 import requests
 
 SERVER_URL = "http://localhost:8000"
+# Create a key at http://localhost:8000/dashboard (not needed when the server runs with VOXCPM_AUTH=false)
+HEADERS = {"Authorization": f"Bearer {os.getenv('VOXCPM_API_KEY', '')}"}
 
 def test_health():
     print("\n--- 1. Checking Health & Server Status ---")
@@ -31,7 +34,7 @@ def test_voice_design():
         "inference_timesteps": 10,
         "response_format": "wav"
     }
-    res = requests.post(f"{SERVER_URL}/v1/tts/generate", json=payload)
+    res = requests.post(f"{SERVER_URL}/v1/tts/generate", json=payload, headers=HEADERS)
     if res.status_code == 200:
         filename = "test_voice_design.wav"
         with open(filename, "wb") as f:
@@ -49,7 +52,7 @@ def test_openai_compatibility():
         "voice": "nova",
         "response_format": "wav"
     }
-    res = requests.post(f"{SERVER_URL}/v1/audio/speech", json=payload)
+    res = requests.post(f"{SERVER_URL}/v1/audio/speech", json=payload, headers=HEADERS)
     if res.status_code == 200:
         filename = "test_openai_tts.wav"
         with open(filename, "wb") as f:
@@ -73,7 +76,7 @@ def test_voice_cloning(sample_wav_path: str = "examples/reference_speaker.wav"):
             "cfg_value": 2.0,
             "inference_timesteps": 10
         }
-        res = requests.post(f"{SERVER_URL}/v1/tts/clone", files=files, data=data)
+        res = requests.post(f"{SERVER_URL}/v1/tts/clone", files=files, data=data, headers=HEADERS)
         if res.status_code == 200:
             filename = "test_cloned_voice.wav"
             with open(filename, "wb") as out_f:
