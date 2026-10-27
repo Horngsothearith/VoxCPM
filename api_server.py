@@ -178,19 +178,24 @@ def audio_numpy_to_wav_bytes(audio_arr: np.ndarray, sample_rate: int) -> bytes:
 
 # ----------------- Request / Response Models -----------------
 
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MB
+MAX_TEXT_LENGTH = 4096
+MAX_AUDIO_BASE64_LENGTH = 35_000_000
+ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".ogg", ".flac", ".m4a", ".aac"}
+
 class OpenAISpeechRequest(BaseModel):
     model: str = Field(default="voxcpm2", description="Model name (e.g. voxcpm2)")
-    input: str = Field(..., description="The text to generate audio for")
-    voice: Optional[str] = Field(default="alloy", description="Voice preset name (alloy, echo, nova, etc.) or custom prompt '(A young woman...)'")
+    input: str = Field(..., max_length=MAX_TEXT_LENGTH, description="The text to generate audio for")
+    voice: Optional[str] = Field(default="alloy", max_length=MAX_TEXT_LENGTH, description="Voice preset name (alloy, echo, nova, etc.) or custom prompt '(A young woman...)'")
     response_format: Optional[str] = Field(default="wav", description="Audio format (wav, pcm)")
     speed: Optional[float] = Field(default=1.0, description="Speech speed adjustment (hint in voice design)")
 
 class TTSGenerateRequest(BaseModel):
-    text: str = Field(..., description="Target text to synthesize")
-    voice_design: Optional[str] = Field(default=None, description="Natural language voice description (e.g. 'A cheerful young woman...')")
-    reference_audio_base64: Optional[str] = Field(default=None, description="Base64 encoded reference audio for voice cloning")
-    prompt_audio_base64: Optional[str] = Field(default=None, description="Base64 encoded prompt audio for ultimate continuation cloning")
-    prompt_text: Optional[str] = Field(default=None, description="Transcript of prompt audio (required with prompt_audio)")
+    text: str = Field(..., max_length=MAX_TEXT_LENGTH, description="Target text to synthesize")
+    voice_design: Optional[str] = Field(default=None, max_length=MAX_TEXT_LENGTH, description="Natural language voice description (e.g. 'A cheerful young woman...')")
+    reference_audio_base64: Optional[str] = Field(default=None, max_length=MAX_AUDIO_BASE64_LENGTH, description="Base64 encoded reference audio for voice cloning")
+    prompt_audio_base64: Optional[str] = Field(default=None, max_length=MAX_AUDIO_BASE64_LENGTH, description="Base64 encoded prompt audio for ultimate continuation cloning")
+    prompt_text: Optional[str] = Field(default=None, max_length=MAX_TEXT_LENGTH, description="Transcript of prompt audio (required with prompt_audio)")
     cfg_value: float = Field(default=2.0, ge=1.0, le=10.0, description="Classifier-Free Guidance value")
     inference_timesteps: int = Field(default=10, ge=1, le=50, description="Diffusion steps (default 10)")
     seed: Optional[int] = Field(default=None, description="Random seed for deterministic generation")
@@ -452,27 +457,57 @@ async def tts_clone_file(
     """
     if not text or not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
+    if len(text) > MAX_TEXT_LENGTH:
+        raise HTTPException(status_code=422, detail=f"Text exceeds maximum allowed length of {MAX_TEXT_LENGTH} characters.")
+    if control and len(control) > MAX_TEXT_LENGTH:
+        raise HTTPException(status_code=422, detail=f"Control text exceeds maximum allowed length of {MAX_TEXT_LENGTH} characters.")
+    if prompt_text and len(prompt_text) > MAX_TEXT_LENGTH:
+        raise HTTPException(status_code=422, detail=f"Prompt text exceeds maximum allowed length of {MAX_TEXT_LENGTH} characters.")
+
+    suffix = Path(file.filename or "input.wav").suffix.lower()
+    if suffix not in ALLOWED_AUDIO_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format '{suffix}'. Allowed formats: {', '.join(sorted(ALLOWED_AUDIO_EXTENSIONS))}",
+        )
 
     model = await run_in_threadpool(get_or_load_model)
-    cost = await run_in_threadpool(accounts.charge, user, text, "/v1/tts/clone")
-
-    # Save uploaded audio file to temporary location
-    suffix = Path(file.filename or "input.wav").suffix or ".wav"
-    temp_ref = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-    contents = await file.read()
-    temp_ref.write(contents)
-    temp_ref.close()
-
-    final_text = text.strip()
-    if control and control.strip():
-        ctrl = control.strip()
-        if not ctrl.startswith("("):
-            ctrl = f"({ctrl})"
-        final_text = f"{ctrl}{final_text}"
-
-    prompt_path = temp_ref.name if prompt_text else None
-
+    temp_ref = None
+    temp_ref_path = None
+    cost = 0
     try:
+        temp_ref = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        temp_ref_path = temp_ref.name
+        total_bytes = 0
+        chunk_size = 1024 * 1024
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            total_bytes += len(chunk)
+            if total_bytes > MAX_UPLOAD_SIZE:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Uploaded file exceeds maximum allowed size of {MAX_UPLOAD_SIZE // (1024 * 1024)}MB.",
+                )
+            temp_ref.write(chunk)
+        temp_ref.close()
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+        # Charge only once the upload is accepted, so rejected uploads cost nothing
+        cost = await run_in_threadpool(accounts.charge, user, text, "/v1/tts/clone")
+
+        final_text = text.strip()
+        if control and control.strip():
+            ctrl = control.strip()
+            if not ctrl.startswith("("):
+                ctrl = f"({ctrl})"
+            final_text = f"{ctrl}{final_text}"
+
+        prompt_path = temp_ref_path if prompt_text else None
+
         t0 = time.time()
         def _run():
             with state.model_lock:
@@ -480,7 +515,7 @@ async def tts_clone_file(
                     text=final_text,
                     prompt_wav_path=prompt_path,
                     prompt_text=prompt_text,
-                    reference_wav_path=temp_ref.name,
+                    reference_wav_path=temp_ref_path,
                     cfg_value=cfg_value,
                     inference_timesteps=inference_timesteps,
                     seed=seed,
@@ -499,16 +534,20 @@ async def tts_clone_file(
                 "X-Sample-Rate": str(state.sample_rate),
             }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         await run_in_threadpool(accounts.refund, user, cost, "/v1/tts/clone")
         logger.error(f"Error during voice cloning: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        try:
-            if os.path.exists(temp_ref.name):
-                os.remove(temp_ref.name)
-        except Exception:
-            pass
+        if temp_ref is not None and not temp_ref.closed:
+            temp_ref.close()
+        if temp_ref_path and os.path.exists(temp_ref_path):
+            try:
+                os.remove(temp_ref_path)
+            except Exception:
+                pass
 
 @app.post("/v1/tts/stream", tags=["VoxCPM"])
 async def tts_stream(req: TTSGenerateRequest, user=Depends(accounts.api_user)):
